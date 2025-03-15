@@ -1,6 +1,7 @@
 #!/bin/bash
+# Arch Linux equivalent of the NixOS flake setup
 
-# System package list
+# System package list (Equivalent to environment.systemPackages)
 PACKAGES=(
   base-devel
   git
@@ -58,6 +59,8 @@ PACKAGES=(
   virt-manager
   virtualbox
   virtualbox-host-modules-arch
+  pacman-contrib
+  libvirt
 )
 
 # AUR packages (using Trizen)
@@ -65,11 +68,15 @@ AUR_PACKAGES=(
   # Add more AUR packages as needed
 )
 
-# Pacman configuration
-cat <<EOF | sudo tee /etc/pacman.conf
-[multilib]
-Include = /etc/pacman.d/mirrorlist
-EOF
+# Ensure Architecture is defined in pacman.conf
+if ! grep -q "^Architecture" /etc/pacman.conf; then
+  echo "Architecture = x86_64" | sudo tee -a /etc/pacman.conf
+fi
+
+# Enable multilib repository if not enabled
+if ! grep -q "\[multilib\]" /etc/pacman.conf; then
+  echo -e "[multilib]\nInclude = /etc/pacman.d/mirrorlist" | sudo tee -a /etc/pacman.conf
+fi
 
 # Enable parallel downloads
 sudo sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf
@@ -83,12 +90,17 @@ trizen -S --noconfirm "${AUR_PACKAGES[@]}"
 # Enable Flathub
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
+# Ensure vboxusers group exists
+if ! grep -q "^vboxusers:" /etc/group; then
+  sudo groupadd vboxusers
+fi
+
 # Enable VirtualBox support
 sudo gpasswd -a derrik vboxusers
 sudo modprobe vboxdrv vboxnetadp vboxnetflt vboxpci
 
-# Enable libvirtd virtualization
-sudo systemctl enable --now libvirtd
+# Enable libvirt virtualization
+sudo systemctl enable --now virtqemud.service
 
 # User-specific configuration
 mkdir -p "$HOME/.config"
@@ -133,21 +145,7 @@ EOF
 # XDG directories setup
 mkdir -p "$HOME/Documents" "$HOME/Downloads" "$HOME/Music" "$HOME/Pictures" "$HOME/Videos"
 
-# GTK theme settings{ config, pkgs, ... }:
-
-{
-  # VirtualBox support
-  virtualisation.virtualbox.host.enable = true;
-  boot.kernelParams = [ "vboxdrv.load_state=1" ];
-  boot.kernelModules = [ "vboxdrv" "vboxnetadp" "vboxnetflt" "vboxpci" ];
-  users.extraGroups.vboxusers.members = [ "derrik" ];
-  
-  # Virtualization support
-  virtualisation.libvirtd.enable = true;
-
-}
-
-
+# GTK theme settings
 mkdir -p "$HOME/.config/gtk-3.0"
 cat <<EOF > "$HOME/.config/gtk-3.0/settings.ini"
 [Settings]
@@ -181,5 +179,5 @@ export TERMINAL=alacritty
 export BROWSER=firefox
 EOF
 
-# Garbage collection
+# Nix garbage collection equivalent
 sudo paccache -r
