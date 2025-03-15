@@ -1,7 +1,6 @@
 #!/bin/bash
-# Arch Linux equivalent of the NixOS flake setup
 
-# System package list (Equivalent to environment.systemPackages)
+# System package list
 PACKAGES=(
   base-devel
   git
@@ -182,5 +181,5 @@ export TERMINAL=alacritty
 export BROWSER=firefox
 EOF
 
-# Nix garbage collection equivalent
+# Garbage collection
 sudo paccache -r
