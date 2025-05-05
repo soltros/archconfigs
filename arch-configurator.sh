@@ -1,183 +1,143 @@
 #!/bin/bash
-# Arch Linux equivalent of the NixOS flake setup
+set -e
 
-# System package list (Equivalent to environment.systemPackages)
-PACKAGES=(
-  base-devel
-  git
-  nano
-  vscode
-  htop
-  btop
-  ripgrep
-  fd
-  bitwarden
-  python312
-  btrfs-progs
-  appimage-run
-  papirus-icon-theme
-  gnome-dconf-editor
-  libreoffice-qt
-  gnome-tweaks
-  spotify
-  tailscale
-  vlc
-  gimp
-  wget
-  zettlr
-  winetricks
-  wine-staging
-  pavucontrol
-  fluffychat
-  distrobox
-  geany
-  thunderbird
-  ntfs-3g
-  firefox
-  flatpak
-  discord
-  kopia
-  telegram-desktop
-  screen
-  nodejs
-  pipx
-  ncdu
-  python-pip
-  caffeine-ng
-  php
-  adapta-gtk-theme
-  mlocate
-  yt-dlp
-  pamixer
-  gthumb
-  unzip
-  file-roller
-  lxrandr
-  pinta
-  okular
-  plex-media-player
-  virt-manager
-  virtualbox
-  virtualbox-host-modules-arch
-  pacman-contrib
-  libvirt
-)
+USER_HOME="/home/$USER"
+FISH_CONFIG_DIR="$USER_HOME/.config/fish"
+FISH_CONFIG_FILE="$FISH_CONFIG_DIR/config.fish"
 
-# AUR packages (using Trizen)
-AUR_PACKAGES=(
-  # Add more AUR packages as needed
-)
+fish_setup() {
+    echo "Setting up Fish config..."
 
-# Ensure Architecture is defined in pacman.conf
-if ! grep -q "^Architecture" /etc/pacman.conf; then
-  echo "Architecture = x86_64" | sudo tee -a /etc/pacman.conf
-fi
+    mkdir -p "$FISH_CONFIG_DIR"
 
-# Enable multilib repository if not enabled
-if ! grep -q "\[multilib\]" /etc/pacman.conf; then
-  echo -e "[multilib]\nInclude = /etc/pacman.d/mirrorlist" | sudo tee -a /etc/pacman.conf
-fi
-
-# Enable parallel downloads
-sudo sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf
-
-# Install system packages
-sudo pacman -Syu --needed "${PACKAGES[@]}"
-
-# Install AUR packages
-trizen -S --noconfirm "${AUR_PACKAGES[@]}"
-
-# Enable Flathub
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
-# Ensure vboxusers group exists
-if ! grep -q "^vboxusers:" /etc/group; then
-  sudo groupadd vboxusers
-fi
-
-# Enable VirtualBox support
-sudo gpasswd -a derrik vboxusers
-sudo modprobe vboxdrv vboxnetadp vboxnetflt vboxpci
-
-# Enable libvirt virtualization
-sudo systemctl enable --now virtqemud.service
-
-# User-specific configuration
-mkdir -p "$HOME/.config"
-mkdir -p "$HOME/.config/fish"
-mkdir -p "$HOME/.config/alacritty"
-
-# Git configuration
-cat <<EOF > "$HOME/.gitconfig"
-[user]
-  name = Derrik Diener
-  email = soltros@proton.me
-[init]
-  defaultBranch = main
-[pull]
-  rebase = true
-[core]
-  editor = nano
-EOF
-
-# Fish shell configuration
-cat <<EOF > "$HOME/.config/fish/config.fish"
+    cat <<EOF > "$FISH_CONFIG_FILE"
 # No greeting
 set -g fish_greeting ""
 
 # Prompt Configuration
 function fish_prompt
-  set_color white; echo -n (whoami)
-  set_color normal; echo -n ':'
-  set_color cyan; echo -n (pwd)
-  set_color normal; echo -n ' '
+    set_color white; echo -n (whoami)
+    set_color normal; echo -n ':'
+    set_color cyan; echo -n (pwd)
+    set_color normal; echo -n ' '
 end
 
 # Environment Variables
-set -gx PATH \$PATH:/home/derrik/.local/bin
+set -x PATH \$PATH $USER_HOME/.local/bin
 
 # Aliases
-alias download-distro="cd ~/scripts; and bash ~/scripts/distro_downloader.sh"
-alias nixpkger="bash ~/scripts/nixpkger"
 alias lsblk="lsblk -e7"
 EOF
 
-# XDG directories setup
-mkdir -p "$HOME/Documents" "$HOME/Downloads" "$HOME/Music" "$HOME/Pictures" "$HOME/Videos"
+    chsh -s "$(which fish)" "$USER"
+    echo "Fish shell set as default for user: $USER"
+}
 
-# GTK theme settings
-mkdir -p "$HOME/.config/gtk-3.0"
-cat <<EOF > "$HOME/.config/gtk-3.0/settings.ini"
-[Settings]
-gtk-theme-name=Adwaita-dark
-gtk-icon-theme-name=Papirus-Dark
-EOF
+install_packages() {
+    echo "Installing system packages..."
+    sudo pacman -Syu --noconfirm
 
-# Alacritty configuration
-cat <<EOF > "$HOME/.config/alacritty/alacritty.yml"
-window:
-  opacity: 0.95
-  padding:
-    x: 10
-    y: 10
-font:
-  normal:
-    family: "DejaVu Sans Mono"
-    style: "Regular"
-  size: 12.0
-colors:
-  primary:
-    background: "#1d1f21"
-    foreground: "#c5c8c6"
-EOF
+    sudo pacman -S --noconfirm \
+        gimp tailscale vlc nano thunderbird git papirus-icon-theme \
+        geany wine fish util-linux pciutils hwdata usbutils coreutils binutils \
+        findutils grep iproute2 bash bash-completion udisks2 base-devel cmake
+}
 
-# Environment variables
-cat <<EOF > "$HOME/.config/environment"
-export EDITOR=nano
-export VISUAL=nano
-export TERMINAL=alacritty
-export BROWSER=firefox
-EOF
+install_flatpaks() {
+    echo "Installing Flatpak apps..."
+    sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-# Nix garbage collection equivalent
-sudo paccache -r
+    sudo flatpak install -y \
+        com.mattjakeman.ExtensionManager \
+        com.discordapp.Discord \
+        io.kopia.KopiaUI \
+        com.spotify.Client \
+        com.valvesoftware.Steam \
+        org.telegram.desktop \
+        tv.plex.PlexDesktop \
+        com.nextcloud.desktopclient.nextcloud \
+        im.riot.Riot \
+        com.github.tchx84.Flatseal
+}
+
+install_docker_distrobox() {
+    echo "Installing Docker and Distrobox..."
+
+    sudo pacman -S --noconfirm docker
+    sudo systemctl enable docker --now
+
+    if ! command -v distrobox >/dev/null 2>&1; then
+        echo "Installing Distrobox from AUR with Trizen..."
+        trizen -S --noconfirm distrobox
+    fi
+}
+
+install_virtualbox() {
+    echo "Installing VirtualBox from repo..."
+    sudo pacman -S --noconfirm virtualbox virtualbox-host-modules-arch linux-headers
+    sudo modprobe vboxdrv
+    echo "VirtualBox installed and kernel module loaded."
+}
+
+install_waterfox() {
+    echo "Installing Waterfox from AUR..."
+    trizen -S --noconfirm waterfox-bin
+}
+
+switch_desktop_environment() {
+    echo "Switching desktop environments (KDE <-> GNOME)..."
+
+    echo "1) GNOME"
+    echo "2) KDE"
+    echo -n "Enter your choice: "
+    read -r de_choice
+
+    case "$de_choice" in
+        1)
+            echo "Installing GNOME and removing KDE..."
+            sudo pacman -Rs --noconfirm plasma-meta kde-applications-meta sddm || true
+            sudo pacman -S --noconfirm gnome gnome-extra gdm
+            sudo systemctl enable gdm
+            ;;
+        2)
+            echo "Installing KDE and removing GNOME..."
+            sudo pacman -Rs --noconfirm gnome gnome-extra gdm || true
+            sudo pacman -S --noconfirm plasma-meta kde-applications-meta sddm
+            sudo systemctl enable sddm
+            ;;
+        *)
+            echo "Invalid choice. Aborting."
+            return
+            ;;
+    esac
+
+    echo "Done. Reboot to complete the desktop switch."
+}
+
+main_menu() {
+    echo "Arch Linux Setup Menu"
+    echo "1) Setup Fish shell and config"
+    echo "2) Install system packages"
+    echo "3) Install Flatpak apps"
+    echo "4) Install Docker and Distrobox"
+    echo "5) Install VirtualBox"
+    echo "6) Install Waterfox (AUR)"
+    echo "7) Switch desktop environments"
+    echo "8) Quit"
+    echo -n "Choose an option: "
+    read -r choice
+
+    case "$choice" in
+        1) fish_setup ;;
+        2) install_packages ;;
+        3) install_flatpaks ;;
+        4) install_docker_distrobox ;;
+        5) install_virtualbox ;;
+        6) install_waterfox ;;
+        7) switch_desktop_environment ;;
+        8) echo "Bye!"; exit 0 ;;
+        *) echo "Invalid option"; exit 1 ;;
+    esac
+}
+
+main_menu
